@@ -1,7 +1,6 @@
 import variants
 import argparse
 import chess
-import chess.polyglot
 import engine_wrapper
 import model
 import json
@@ -50,21 +49,21 @@ def upgrade_account(li):
     logger.info("Succesfully upgraded to Bot Account!")
     return True
 
-#@backoff.on_exception(backoff.expo, BaseException, max_time=600, giveup=is_final)
-#def watch_control_stream(control_queue, li):
-#    response = li.get_event_stream()
-#    control_queue.put_nowait({"type": "connected"})
-#    try:
-#        for line in response.iter_lines():
-#            if line:
-#                event = json.loads(line.decode('utf-8'))
-#                control_queue.put_nowait(event)
-#            else:
-#                control_queue.put_nowait({"type": "ping"})
-#    except (RemoteDisconnected, ChunkedEncodingError, ConnectionError, ProtocolError) as exception:
-#        logger.error("Terminating client due to connection error")
-#        traceback.print_exception(type(exception), exception, exception.__traceback__)
-#        control_queue.put_nowait({"type": "terminated"})
+@backoff.on_exception(backoff.expo, BaseException, max_time=600, giveup=is_final)
+def watch_control_stream(control_queue, li):
+    response = li.get_event_stream()
+    control_queue.put_nowait({"type": "connected"})
+    try:
+        for line in response.iter_lines():
+            if line:
+                event = json.loads(line.decode('utf-8'))
+                control_queue.put_nowait(event)
+            else:
+                control_queue.put_nowait({"type": "ping"})
+    except (RemoteDisconnected, ChunkedEncodingError, ConnectionError, ProtocolError) as exception:
+        logger.error("Terminating client due to connection error")
+        traceback.print_exception(type(exception), exception, exception.__traceback__)
+        control_queue.put_nowait({"type": "terminated"})
 
 def watch_control_stream(control_queue, li):
     while True:
@@ -113,12 +112,13 @@ def start(li, user_profile, engine_factory, config):
                 break
 
             elif event["type"] == "ping":
-                li.pong()
-
-            elif event["type"] == "connected":
-                for variant in challenge_config["variants"]:
-                    logger.info("Creating seek for %s" % variant)
-                    li.create_seek(variant)
+                # li.pong()
+                continue
+                
+#            elif event["type"] == "connected":
+#               for variant in challenge_config["variants"]:
+#                   logger.info("Creating seek for %s" % variant)
+#                   li.create_seek(variant)
 
             elif event["type"] == "local_game_done":
                 busy_processes -= 1
@@ -152,10 +152,10 @@ def start(li, user_profile, engine_factory, config):
                 except Exception:
                     skill_level = 8
 
-                try:
-                    chess960 = event["game"]["chess960"] == "True"
-                except Exception:
-                    chess960 = False
+#               try:
+#                    chess960 = event["game"]["chess960"] == "True"
+#               except Exception:
+#                   chess960 = False
 
                 pool.apply_async(play_game, [li, game_id, control_queue, engine_factory, user_profile, config, challenge_queue, skill_level, chess960])
                 busy_processes += 1
@@ -173,10 +173,10 @@ def start(li, user_profile, engine_factory, config):
                 except Exception:
                     skill_level = 8
 
-                try:
-                    chess960 = event["game"]["chess960"] == "True"
-                except Exception:
-                    chess960 = False
+#                try:
+#                   chess960 = event["game"]["chess960"] == "True"
+#               except Exception:
+#                   chess960 = False
 
                 pool.apply_async(analyze_game, [li, game_id, control_queue, engine_factory, user_profile, config, skill_level, chess960, event["username"]])
                 busy_processes += 1
@@ -206,6 +206,8 @@ def analyze_game(li, game_id, control_queue, engine_factory, user_profile, confi
     while len(line0) == 0:
         line0 = next(lines)
     #Initial response of stream will be the full game info. Store it
+   
+    
     game = model.Game(json.loads(line0.decode('utf-8')), user_profile["username"], li.baseUrl, config.get("abort_time", 20))
     board = setup_board(game, chess960)
     engine = engine_factory(board)
@@ -237,14 +239,14 @@ def play_game(li, game_id, control_queue, engine_factory, user_profile, config, 
     logger.info("+++ {}".format(game))
 
     engine_cfg = config["engine"]
-    polyglot_cfg = engine_cfg.get("polyglot", {})
-    book_cfg = polyglot_cfg.get("book", {})
+#    polyglot_cfg = engine_cfg.get("polyglot", {})
+#    book_cfg = polyglot_cfg.get("book", {})
 
     engine.set_skill_level(skill_level)
 
     try:
-        if not polyglot_cfg.get("enabled") or not play_first_book_move(game, engine, board, li, book_cfg):
-            play_first_move(game, engine, board, li)
+#       if not polyglot_cfg.get("enabled") or not play_first_book_move(game, engine, board, li, book_cfg):
+#           play_first_move(game, engine, board, li)
 
         engine.set_time_control(game)
 
@@ -266,8 +268,8 @@ def play_game(li, game_id, control_queue, engine_factory, user_profile, config, 
                         sleep = min(5, delay * accel)
                         time.sleep(sleep)
                     best_move = None
-                    if polyglot_cfg.get("enabled") and len(moves) <= polyglot_cfg.get("max_depth", 8) * 2 - 1:
-                        best_move = get_book_move(board, book_cfg)
+#                   if polyglot_cfg.get("enabled") and len(moves) <= polyglot_cfg.get("max_depth", 8) * 2 - 1:
+#                       best_move = get_book_move(board, book_cfg)
                     if best_move == None:
                         best_move = engine.search(board, upd["wtime"], upd["btime"], upd["winc"], upd["binc"])
                     li.make_move(game.id, best_move)
@@ -301,50 +303,50 @@ def play_first_move(game, engine, board, li):
     if is_engine_move(game, moves):
         # need to hardcode first movetime since Lishogi has 30 sec limit.
         # best_move = engine.first_search(board, 10000)
-        best_move = engine.first_search(board, 100)
+        best_move = engine.first_search(board, 1000)
         li.make_move(game.id, best_move)
         return True
     return False
 
 
-def play_first_book_move(game, engine, board, li, config):
-    moves = game.state["moves"].split()
-    if is_engine_move(game, moves):
-        book_move = get_book_move(board, config)
-        if book_move:
-            li.make_move(game.id, book_move)
-            return True
-        else:
-            return play_first_move(game, engine, board, li)
-    return False
+#def play_first_book_move(game, engine, board, li, config):
+#    moves = game.state["moves"].split()
+#    if is_engine_move(game, moves):
+#        book_move = get_book_move(board, config)
+#        if book_move:
+#            li.make_move(game.id, book_move)
+#            return True
+#        else:
+#            return play_first_move(game, engine, board, li)
+#    return False
 
 
-def get_book_move(board, config):
-    if board.uci_variant == "chess":
-        book = config["standard"]
-    else:
-        if config.get("{}".format(board.uci_variant)):
-            book = config["{}".format(board.uci_variant)]
-        else:
-            return None
-
-    with chess.polyglot.open_reader(book) as reader:
-        try:
-            selection = config.get("selection", "weighted_random")
-            if selection == "weighted_random":
-                move = reader.weighted_choice(board).move()
-            elif selection == "uniform_random":
-                move = reader.choice(board, config.get("min_weight", 1)).move()
-            elif selection == "best_move":
-                move = reader.find(board, config.get("min_weight", 1)).move()
-        except IndexError:
-            # python-shogi raises "IndexError" if no entries found
-            move = None
-
-    if move is not None:
-        logger.info("Got move {} from book {}".format(move, book))
-
-    return move
+#def get_book_move(board, config):
+#    if board.uci_variant == "chess":
+#        book = config["standard"]
+#    else:
+#        if config.get("{}".format(board.uci_variant)):
+#            book = config["{}".format(board.uci_variant)]
+#        else:
+#            return None
+#
+#    with chess.polyglot.open_reader(book) as reader:
+#        try:
+#            selection = config.get("selection", "weighted_random")
+#            if selection == "weighted_random":
+#                move = reader.weighted_choice(board).move()
+#            elif selection == "uniform_random":
+#                move = reader.choice(board, config.get("min_weight", 1)).move()
+#            elif selection == "best_move":
+#                move = reader.find(board, config.get("min_weight", 1)).move()
+#        except IndexError:
+#            # python-shogi raises "IndexError" if no entries found
+#            move = None
+#
+#    if move is not None:
+#        logger.info("Got move {} from book {}".format(move, book))
+#
+#    return move
 
 
 def setup_board(game, chess960):
