@@ -1,7 +1,5 @@
 import variants
 import argparse
-import chess
-import chess.polyglot
 import engine_wrapper
 import model
 import json
@@ -29,7 +27,7 @@ try:
 except ImportError:
     from http.client import BadStatusLine as RemoteDisconnected
 
-__version__ = "1.1.4"
+__version__ = "0.1"
 
 terminated = False
 
@@ -114,11 +112,13 @@ def start(li, user_profile, engine_factory, config):
 
             elif event["type"] == "ping":
                 li.pong()
-
+            
+            """
             elif event["type"] == "connected":
                 for variant in challenge_config["variants"]:
                     logger.info("Creating seek for %s" % variant)
                     li.create_seek(variant)
+            """
 
             elif event["type"] == "local_game_done":
                 busy_processes -= 1
