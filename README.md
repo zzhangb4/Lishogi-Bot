@@ -1,4 +1,5 @@
 # lishogi-bot
+look at the test branch
 
 # Install:
 Install as you would lichess-bot. 
